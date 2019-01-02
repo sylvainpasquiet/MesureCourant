@@ -2,7 +2,7 @@
 //#define SANS_RF 
 
 // Enable debug prints
-#define MY_DEBUG
+//#define MY_DEBUG
 
 // Enable and select radio type attached
 #define MY_RADIO_NRF24
@@ -43,13 +43,15 @@ unsigned long OldTimeSend[VOIES_ANA];
 uint32_t SLEEP_TIME = 10; // Sleep time between reads (in milliseconds)
 unsigned char i;
 
+unsigned long gOldTimeSend=0;
+
 #ifndef SANS_RF 
 MyMessage Msg;
 
 void presentation()
 {
 	// Send the sketch version information to the gateway and Controller
-	sendSketchInfo("Mesures de courant", "2.00");
+	sendSketchInfo("Mesures de courant", "2.20");
 
 	// Register all sensors to gateway (they will be created as child devices)
   for (i=0;i<VOIES_ANA;i++) 
@@ -65,11 +67,14 @@ void presentation()
 void setup()
 { 
   analogReference(EXTERNAL);
-  Serial.begin(115200);  
+  //Serial.begin(115200);  
+  lastCurrent[0]=-1.0;
+  lastCurrent[i]=-1.0;
 }
 
 void loop()
 {
+  unsigned long ActualTime = millis();
   switch(EtapeG7)
   {
     case 0:
@@ -133,13 +138,14 @@ void loop()
 
   for (i=0;i<2;i++) 
   {
-    if ((fabs(calcCurrent[i]-lastCurrent[i])>10)||(millis()-OldTimeSend[i]>5000)) 
+    if (((fabs(calcCurrent[i]-lastCurrent[i])>10)||(ActualTime-OldTimeSend[i]>(10000+1000*i)))&&(((ActualTime-gOldTimeSend)>10000)||((ActualTime-gOldTimeSend)>1500)&&(fabs(calcCurrent[i]-lastCurrent[i])>200))) 
     {
       if(send(Msg.setSensor(CHILD_ID_CURRENT_1+i).setType(V_CURRENT).set(ceil(calcCurrent[i])/1000,3),true)) 
-      
-      lastCurrent[i] = calcCurrent[i];
-      OldTimeSend[i] = millis();
-      sleep(500);
+      {
+        lastCurrent[i] = calcCurrent[i];
+      }
+      OldTimeSend[i] = ActualTime;
+      gOldTimeSend = ActualTime;
       /*
       Serial.print(i);
       Serial.print(" - Mesure (0-1023): ");
@@ -165,7 +171,7 @@ void loop()
   }
 
 #ifndef SANS_RF 
-	sleep(SLEEP_TIME);
+	wait(SLEEP_TIME);
 #else
   delay(10);
 #endif  
